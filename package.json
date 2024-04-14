@@ -1,0 +1,33 @@
+{
+  "name": "koishi-plugin-cs2-tools",
+  "description": "获取cs库存及当前价值等信息",
+  "version": "1.0.0",
+  "main": "lib/index.js",
+  "typings": "lib/index.d.ts",
+  "files": [
+    "lib",
+    "dist"
+  ],
+  "contributors": [
+    "SparkUiX <thoe9008@outlook.com>"
+  ],
+  "homepage": "https://github.com/SparkUiX/koishi-plugin-cs2-tools",
+  "license": "MIT",
+  "keywords": [
+    "chatbot",
+    "koishi",
+    "plugin",
+    "cs2",
+    "csgo",
+    "buff",
+    "SparkUiX",
+    "steam"
+    
+  ],
+  "service": {
+    "require": ["database","puppeteer"]
+  },
+  "peerDependencies": {
+    "koishi": "^4.17.2"
+  }
+}
