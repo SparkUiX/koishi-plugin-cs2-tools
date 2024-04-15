@@ -47,7 +47,7 @@ ctx.model.extend('cs2buff', {
         await page.goto('https://buff.163.com/')
         const scookies = await page.cookies();
         await page.deleteCookie(...scookies)
-        await page.goto('https://buff.163.com', { waitUntil: 'networkidle0' });
+        await page.goto('https://buff.163.com', { waitUntil: 'load' });
         // session.send('请发送您根据教程获取到的Cookie')
         await page.evaluate(() => {
                 //@ts-ignore //忽略ts检查
@@ -92,8 +92,8 @@ ctx.model.extend('cs2buff', {
         // console.log(usercookie)
         await page.setCookie(...usercookie)
       const url = `https://buff.163.com/market/steam_inventory?game=csgo#page_num=1&page_size=20&search=&sort_by=price.desc&state=all`
-      await page.goto(url,{timeout:5000})//,waitUntil:'domcontentloaded'
-      console.log( await page.cookies())
+      await page.goto(url,{timeout:5000,waitUntil:'load'})//
+    //   console.log( await page.cookies())
           await page.waitForSelector('img.user-avatar',{visible:true,timeout:5000});
     const imageElement = await page.$('img.user-avatar');
 
@@ -106,13 +106,32 @@ ctx.model.extend('cs2buff', {
         const market_card=await page.$('.list_card.list_card_small2.l_Clearfix');
         const KuCunShot=await market_card.screenshot({type:'png'});
         // const src = await page.evaluate(el => el.getAttribute('src'), imageElement);//获取头像
-        await page.close();
+
         await ctx.database.upsert('cs2buff',[{id:session.userId,last_value:Number(guzhi)}])
         session.send(`库存件数：${jianshu}
         估值：￥${guzhi}
         较上一次查询，增加${(Number(guzhi)-last_value).toFixed(2)}元
         涨跌幅度：${calculatePercentageChange(last_value,Number(guzhi))}
-        库存: ${h.image(KuCunShot,'image/png')}`);//        头像：${h.image(src)}
+        库存: ${h.image(KuCunShot,'image/png')}
+        你可以在30秒内在此消息下使用“检视 <序号>”来获取你想在游戏中检视的物品`);//        头像：${h.image(src)}
+        // const quotemessage = session.quote.content
+        // if(quotemessage) 
+        // console.log(quotemessage)
+        const prompt=await session.prompt(30000)
+        if(!prompt) return
+        const jscz=(prompt).split(' ')
+        if(jscz[0]=='检视'){
+            const selector = `li:nth-of-type(${jscz[1]}) a.csgo-action-link`;
+            if(!(Number(jscz[1])<20)) return '请输入正确的序号'
+            // 获取 href 属性
+            //@ts-ignore
+            const steamLink = await page.$eval(selector, el => el.href);
+            await session.send(`请复制以下链接到浏览器打开，并允许打开外部应用
+            请确保电脑上安装了Steam以及cs2最新客户端
+            `)
+            await session.send(steamLink)
+        }
+        await page.close();
     }
     catch(e){
         // console.log(e)
