@@ -3,12 +3,15 @@ import {} from 'koishi-plugin-puppeteer'
 export const name = 'cs2-tools';
 export const inject = ['puppeteer','database'];
 export interface Config {
+    isSendTimes: boolean;
+    // KcCounts: number;
 }
 
 export const Config: Schema<Config> = Schema.object({
-
+    isSendTimes: Schema.boolean().default(true).description('这个开关用来确认是否向开发者反馈使用情况，自愿开启，可以用于鼓励开发者'),
+    // KcCounts : Schema.number().default(20).description('访问的库存件数，请根据机器人网络环境设置，如果库存获取失败，请适当调整此值').max(80).min(20)
 });
-function calculatePercentageChange(initialValue, finalValue) {
+function calculatePercentageChange(initialValue: number, finalValue: number) {
     if(initialValue == 0) return '0%'
     const change = ((finalValue - initialValue) / initialValue) * 100;
     return change.toFixed(2) + '%'; // 保留两位小数并添加百分号
@@ -27,8 +30,21 @@ declare module 'koishi' {
     last_value: number
   }
 
-export function apply(ctx: Context) {
-    
+export function apply(ctx: Context,config: Config) {
+    async function PostTimedata(command: string,times: number) {
+        if(!config.isSendTimes) return
+        const url=`https://90008.top/KoiAPI/PluginsUse/${name}/koitime.php`
+        // console.log('正在发送数据……')
+        const data = {"command":command,"times":times}
+        try{
+        const request=await ctx.http.post(url, data,{headers: {'Content-Type': 'application/json'}})
+        }catch(e){
+            console.log(e)
+        }
+        /*
+        此函数用于统计用户使用情况，用户自愿开启，不会收集任何隐私信息，本插件全面开源
+        */
+    }
 ctx.model.extend('cs2buff', {
       id: 'string',
       cookie: 'json',
@@ -43,11 +59,11 @@ ctx.model.extend('cs2buff', {
     if(ensure=='Y'){
         session.send('正在获取登录二维码……')
         const page = await ctx.puppeteer.page()
-
         await page.goto('https://buff.163.com/')
         const scookies = await page.cookies();
         await page.deleteCookie(...scookies)
         await page.goto('https://buff.163.com', { waitUntil: 'load' });
+        
         // session.send('请发送您根据教程获取到的Cookie')
         await page.evaluate(() => {
                 //@ts-ignore //忽略ts检查
@@ -70,16 +86,18 @@ ctx.model.extend('cs2buff', {
         await ctx.database.upsert('cs2buff',[{id:session.userId,cookie:cookies,last_value:0}])
         await page.close();
         session.send('绑定成功，你可以使用“查看库存”查看是否成功绑定')
+        PostTimedata("绑定账号",1)
       }else{
         session.send('已取消绑定')
       }
   }
 )
   ctx.command('查看库存','查看Buff库存')
-      .action(async ({ session }) => {
+   .option('pages','-p <pages>')
+      .action(async ({ session,options}) => {
 
         try{
-
+            await session.send('正在等待库存刷新，请稍等……')
         const datas=await ctx.database.get('cs2buff',session.userId)
         const last_value=datas[0].last_value
         const usercookie=datas[0].cookie
@@ -91,18 +109,30 @@ ctx.model.extend('cs2buff', {
         // ];
         // console.log(usercookie)
         await page.setCookie(...usercookie)
-      const url = `https://buff.163.com/market/steam_inventory?game=csgo#page_num=1&page_size=20&search=&sort_by=price.desc&state=all`
-      await page.goto(url,{timeout:5000,waitUntil:'load'})//
+      const url = `https://buff.163.com/market/steam_inventory?game=csgo#page_num=${options.pages}&page_size=20&search=&sort_by=price.desc&state=all`
+      await page.goto(url,{timeout:5000,waitUntil:'load'})
     //   console.log( await page.cookies())
+    //if(options.f) await page.reload({waitUntil:'load'})//刷新界面，不知道有没有用
+    await page.waitForSelector('#refresh.i_Btn', { visible: true });
+
+    // 点击元素
+    await page.click('#refresh.i_Btn');
+        // 等待元素文本变回“刷新”
+        await page.waitForFunction(
+            () => document.querySelector('#refresh.i_Btn').textContent === '刷新',
+            { timeout: 10000 } // 可以设置超时时间，例如 10000 毫秒
+        );
+        await page.goto(url,{waitUntil:'load'})
+    await page.waitForSelector('li.my_inventory', { visible: true });
           await page.waitForSelector('img.user-avatar',{visible:true,timeout:5000});
     const imageElement = await page.$('img.user-avatar');
-
+            
     await page.waitForSelector('strong.c_Yellow.f_Normal',{visible:true,timeout:5000})
         // 提取元素的文本内容
         const jianshu = await page.$eval('strong.c_Yellow.f_Normal', el => el.textContent);//获取件数
         const guzhi = (await page.$eval('strong.c_Yellow.f_Normal:nth-of-type(2)', el => el.textContent)).replace(/[^0-9.]/g, '');;//获取估值
         await page.waitForSelector('.list_card.list_card_small2.l_Clearfix',{visible:true});
-        await page.waitForFunction(() => document.querySelectorAll('div.list_card.list_card_small2.l_Clearfix ul li').length === 20);
+        await page.waitForFunction(() => document.querySelectorAll('div.list_card.list_card_small2.l_Clearfix ul li').length == 20,{timeout:5000});
         const market_card=await page.$('.list_card.list_card_small2.l_Clearfix');
         const KuCunShot=await market_card.screenshot({type:'png'});
         // const src = await page.evaluate(el => el.getAttribute('src'), imageElement);//获取头像
@@ -113,10 +143,12 @@ ctx.model.extend('cs2buff', {
         较上一次查询，增加${(Number(guzhi)-last_value).toFixed(2)}元
         涨跌幅度：${calculatePercentageChange(last_value,Number(guzhi))}
         库存: ${h.image(KuCunShot,'image/png')}
-        你可以在30秒内在此消息下使用“检视 <序号>”来获取你想在游戏中检视的物品`);//        头像：${h.image(src)}
+        如遇到图片加载不完全的问题，请检查网络环境并多次获取
+        你可以在30秒内在此消息下使用“检视 序号”来获取你想在游戏中检视的物品`);//        头像：${h.image(src)}
         // const quotemessage = session.quote.content
         // if(quotemessage) 
         // console.log(quotemessage)
+        PostTimedata("查看库存",1)
         const prompt=await session.prompt(30000)
         if(!prompt) return
         const jscz=(prompt).split(' ')
@@ -130,11 +162,13 @@ ctx.model.extend('cs2buff', {
             请确保电脑上安装了Steam以及cs2最新客户端
             `)
             await session.send(steamLink)
+            PostTimedata("检视",1)
         }
         await page.close();
+
     }
     catch(e){
-        // console.log(e)
+        console.log(e)
         return '获取库存失败，请检查Cookie是否绑定成功或失效,如无法解决，请向开发者反馈以下内容'+e
     }
       });
