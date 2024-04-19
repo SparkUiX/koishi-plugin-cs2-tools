@@ -38,6 +38,7 @@ export function apply(ctx: Context,config: Config) {
         const data = {"command":command,"times":times}
         try{
         const request=await ctx.http.post(url, data,{headers: {'Content-Type': 'application/json'}})
+        console.log(request)
         }catch(e){
             console.log(e)
         }
@@ -93,7 +94,7 @@ ctx.model.extend('cs2buff', {
   }
 )
   ctx.command('查看库存','查看Buff库存')
-   .option('pages','-p <pages>')
+   .option('pages','-p <pages>',{ fallback: 1 })
       .action(async ({ session,options}) => {
 
         try{

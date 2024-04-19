@@ -1,7 +1,7 @@
 {
   "name": "koishi-plugin-cs2-tools",
   "description": "获取cs库存及当前价值等信息",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "main": "lib/index.js",
   "typings": "lib/index.d.ts",
   "files": [
